@@ -19,6 +19,24 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
+    - name: Auto-Fix Directory Structure
+      run: |
+        mkdir -p app/src/main/java/com/example/myapp
+        mkdir -p app/src/main
+        
+        # Move files to expected Android folder structure
+        if [ -f "AndroidManifest.xml" ]; then mv AndroidManifest.xml app/src/main/; fi
+        if [ -f "MainActivity.kt" ]; then mv MainActivity.kt app/src/main/java/com/example/myapp/; fi
+        if [ -f "MainActivity.java" ]; then mv MainActivity.java app/src/main/java/com/example/myapp/; fi
+        
+        # Create settings.gradle if missing
+        if [ ! -f "settings.gradle" ]; then echo "include ':app'" > settings.gradle; fi
+        
+        # Setup root build.gradle if missing
+        if [ ! -f "build.gradle" ]; then
+          echo "plugins { id 'com.android.application' version '8.1.1' apply false }" > build.gradle
+        fi
+
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v4
 
