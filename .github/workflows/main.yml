@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build RealWear Barcode Scanner APK
 
 on:
   push:
@@ -19,41 +19,174 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Generate Clean Pure Android Project
+    - name: Generate RealWear Scanner Project
       run: |
         rm -rf app settings.gradle build.gradle
-        mkdir -p app/src/main/java/com/example/myapp
+        mkdir -p app/src/main/java/com/realwear/barcodescanner
+        mkdir -p app/src/main/res/layout
 
-        # 1. Standard Native Java Activity (No AndroidX dependency issues)
-        cat << 'EOF' > app/src/main/java/com/example/myapp/MainActivity.java
-        package com.example.myapp;
+        # 1. Java Source Code (CameraX + ML Kit Logic)
+        cat << 'EOF' > app/src/main/java/com/realwear/barcodescanner/MainActivity.java
+        package com.realwear.barcodescanner;
 
-        import android.app.Activity;
+        import android.Manifest;
+        import android.content.pm.PackageManager;
         import android.os.Bundle;
+        import android.util.Size;
         import android.widget.TextView;
+        import android.widget.Toast;
+        import androidx.annotation.NonNull;
+        import androidx.appcompat.app.AppCompatActivity;
+        import androidx.camera.core.Camera;
+        import androidx.camera.core.CameraSelector;
+        import androidx.camera.core.ImageAnalysis;
+        import androidx.camera.core.Preview;
+        import androidx.camera.lifecycle.ProcessCameraProvider;
+        import androidx.camera.view.PreviewView;
+        import androidx.core.app.ActivityCompat;
+        import androidx.core.content.ContextCompat;
+        import com.google.common.util.concurrent.ListenableFuture;
+        import com.google.mlkit.vision.barcode.BarcodeScanner;
+        import com.google.mlkit.vision.barcode.BarcodeScanning;
+        import com.google.mlkit.vision.barcode.common.Barcode;
+        import com.google.mlkit.vision.common.InputImage;
+        import java.util.concurrent.ExecutionException;
+        import java.util.concurrent.ExecutorService;
+        import java.util.concurrent.Executors;
 
-        public class MainActivity extends Activity {
+        public class MainActivity extends AppCompatActivity {
+            private static final int CAMERA_PERMISSION_CODE = 101;
+            private PreviewView previewView;
+            private TextView txtResult;
+            private ExecutorService cameraExecutor;
+            private Camera camera;
+
             @Override
             protected void onCreate(Bundle savedInstanceState) {
                 super.onCreate(savedInstanceState);
-                TextView tv = new TextView(this);
-                tv.setText("App Built Successfully!");
-                tv.setTextSize(24);
-                setContentView(tv);
+                
+                // UI Setup
+                setContentView(createLayout());
+
+                cameraExecutor = Executors.newSingleThreadExecutor();
+
+                if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                    startCamera();
+                } else {
+                    ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, CAMERA_PERMISSION_CODE);
+                }
+            }
+
+            private android.view.View createLayout() {
+                android.widget.LinearLayout layout = new android.widget.LinearLayout(this);
+                layout.setOrientation(android.widget.LinearLayout.VERTICAL);
+                layout.setLayoutParams(new android.widget.LinearLayout.LayoutParams(
+                        android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                        android.widget.LinearLayout.LayoutParams.MATCH_PARENT));
+
+                previewView = new PreviewView(this);
+                android.widget.LinearLayout.LayoutParams previewParams = new android.widget.LinearLayout.LayoutParams(
+                        android.widget.LinearLayout.LayoutParams.MATCH_PARENT, 0, 0.75f);
+                previewView.setLayoutParams(previewParams);
+                layout.addView(previewView);
+
+                txtResult = new TextView(this);
+                txtResult.setText("Point camera at barcode (Up to 10m range)...");
+                txtResult.setTextSize(18);
+                txtResult.setPadding(20, 20, 20, 20);
+                txtResult.setBackgroundColor(0xFF222222);
+                txtResult.setTextColor(0xFFFFFFFF);
+                android.widget.LinearLayout.LayoutParams textParams = new android.widget.LinearLayout.LayoutParams(
+                        android.widget.LinearLayout.LayoutParams.MATCH_PARENT, 0, 0.25f);
+                txtResult.setLayoutParams(textParams);
+                layout.addView(txtResult);
+
+                return layout;
+            }
+
+            private void startCamera() {
+                ListenableFuture<ProcessCameraProvider> cameraProviderFuture = ProcessCameraProvider.getInstance(this);
+                cameraProviderFuture.addListener(() -> {
+                    try {
+                        ProcessCameraProvider cameraProvider = cameraProviderFuture.get();
+                        
+                        Preview preview = new Preview.Builder().build();
+                        preview.setSurfaceProvider(previewView.getSurfaceProvider());
+
+                        ImageAnalysis imageAnalysis = new ImageAnalysis.Builder()
+                                .setTargetResolution(new Size(1920, 1080))
+                                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                                .build();
+
+                        BarcodeScanner scanner = BarcodeScanning.getClient();
+
+                        imageAnalysis.setAnalyzer(cameraExecutor, imageProxy -> {
+                            @SuppressWarnings("UnsafeOptInUsageError")
+                            android.media.Image mediaImage = imageProxy.getImage();
+                            if (mediaImage != null) {
+                                InputImage image = InputImage.fromMediaImage(mediaImage, imageProxy.getImageInfo().getRotationDegrees());
+                                scanner.process(image)
+                                        .addOnSuccessListener(barcodes -> {
+                                            for (Barcode barcode : barcodes) {
+                                                String rawValue = barcode.getRawValue();
+                                                int valueType = barcode.getValueType();
+                                                runOnUiThread(() -> txtResult.setText("Scanned Data:\n" + rawValue + "\nType: " + valueType));
+                                            }
+                                        })
+                                        .addOnCompleteListener(task -> imageProxy.close());
+                            } else {
+                                imageProxy.close();
+                            }
+                        });
+
+                        CameraSelector cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA;
+                        cameraProvider.unbindAll();
+                        camera = cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageAnalysis);
+
+                        // Set 2.5x - 3x zoom for 10-meter long range scanning
+                        if (camera != null) {
+                            camera.getCameraControl().setLinearZoom(0.35f);
+                        }
+
+                    } catch (ExecutionException | InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }, ContextCompat.getMainExecutor(this));
+            }
+
+            @Override
+            public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+                super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+                if (requestCode == CAMERA_PERMISSION_CODE && grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    startCamera();
+                } else {
+                    Toast.makeText(this, "Camera Permission Required", Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            protected void onDestroy() {
+                super.onDestroy();
+                cameraExecutor.shutdown();
             }
         }
         EOF
 
-        # 2. Native Manifest
+        # 2. Android Manifest with Permissions
         cat << 'EOF' > app/src/main/AndroidManifest.xml
         <?xml version="1.0" encoding="utf-8"?>
         <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-            package="com.example.myapp">
+            package="com.realwear.barcodescanner">
+
+            <uses-permission android:name="android.permission.CAMERA" />
+            <uses-feature android:name="android.hardware.camera" android:required="true" />
+            <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+
             <application
                 android:allowBackup="true"
-                android:label="My App"
+                android:label="RealWear Scanner"
                 android:supportsRtl="true"
-                android:theme="@android:style/Theme.Material.Light">
+                android:theme="@style/Theme.AppCompat.Light.NoActionBar">
                 <activity
                     android:name=".MainActivity"
                     android:exported="true">
@@ -82,7 +215,7 @@ jobs:
                 mavenCentral()
             }
         }
-        rootProject.name = "My Application"
+        rootProject.name = "RealWearScanner"
         include ':app'
         EOF
 
@@ -93,27 +226,33 @@ jobs:
         }
         EOF
 
-        # 5. App build.gradle (Pure Android - Zero External Dependencies)
+        # 5. App build.gradle (Target SDK 34 for Android 14)
         cat << 'EOF' > app/build.gradle
         plugins {
             id 'com.android.application'
         }
 
         android {
-            namespace 'com.example.myapp'
-            compileSdk 33
+            namespace 'com.realwear.barcodescanner'
+            compileSdk 34
 
             defaultConfig {
-                applicationId "com.example.myapp"
-                minSdk 21
-                targetSdk 33
+                applicationId "com.realwear.barcodescanner"
+                minSdk 26
+                targetSdk 34
                 versionCode 1
                 versionName "1.0"
             }
         }
 
         dependencies {
-            // No external libraries to prevent version conflicts
+            implementation 'androidx.appcompat:appcompat:1.6.1'
+            implementation 'androidx.camera:camera-core:1.3.1'
+            implementation 'androidx.camera:camera-camera2:1.3.1'
+            implementation 'androidx.camera:camera-lifecycle:1.3.1'
+            implementation 'androidx.camera:camera-view:1.3.1'
+            implementation 'com.google.mlkit:barcode-scanning:17.2.0'
+            implementation 'com.google.guava:guava:31.1-android'
         }
         EOF
 
@@ -125,8 +264,8 @@ jobs:
     - name: Build with Gradle
       run: gradle assembleDebug
 
-    - name: Upload APK
+    - name: Upload RealWear Scanner APK
       uses: actions/upload-artifact@v4
       with:
-        name: app-debug
+        name: realwear-scanner-10m
         path: app/build/outputs/apk/debug/app-debug.apk
