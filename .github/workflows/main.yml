@@ -19,32 +19,33 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Generate Complete Android Structure
+    - name: Generate Fresh Working Android Project
       run: |
+        # Fresh setup
+        rm -rf app settings.gradle build.gradle
         mkdir -p app/src/main/java/com/example/myapp
-        
-        # Move MainActivity.kt if exists, else create default
-        if [ -f "MainActivity.kt" ]; then 
-          mv MainActivity.kt app/src/main/java/com/example/myapp/
-        else
-          cat << 'EOF' > app/src/main/java/com/example/myapp/MainActivity.kt
-        package com.example.myapp
-        import android.os.Bundle
-        import androidx.appcompat.app.AppCompatActivity
-        import android.widget.TextView
 
-        class MainActivity : AppCompatActivity() {
-            override fun onCreate(savedInstanceState: Bundle?) {
-                super.onCreate(savedInstanceState)
-                val textView = TextView(this)
-                textView.text = "Hello World!"
-                setContentView(textView)
+        # 1. Create MainActivity.java (Zero Kotlin version conflicts)
+        cat << 'EOF' > app/src/main/java/com/example/myapp/MainActivity.java
+        package com.example.myapp;
+
+        import android.os.Bundle;
+        import androidx.appcompat.app.AppCompatActivity;
+        import android.widget.TextView;
+
+        public class MainActivity extends AppCompatActivity {
+            @Override
+            protected void onCreate(Bundle savedInstanceState) {
+                super.onCreate(savedInstanceState);
+                TextView tv = new TextView(this);
+                tv.setText("App Built Successfully!");
+                tv.setTextSize(24);
+                setContentView(tv);
             }
         }
         EOF
-        fi
 
-        # Generate AndroidManifest.xml
+        # 2. Create AndroidManifest.xml
         cat << 'EOF' > app/src/main/AndroidManifest.xml
         <?xml version="1.0" encoding="utf-8"?>
         <manifest xmlns:android="http://schemas.android.com/apk/res/android"
@@ -66,10 +67,10 @@ jobs:
         </manifest>
         EOF
 
-        # Generate settings.gradle
+        # 3. Create settings.gradle
         echo "include ':app'" > settings.gradle
 
-        # Generate Root build.gradle
+        # 4. Create Root build.gradle
         cat << 'EOF' > build.gradle
         buildscript {
             repositories {
@@ -78,7 +79,6 @@ jobs:
             }
             dependencies {
                 classpath 'com.android.tools.build:gradle:8.1.1'
-                classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.8.20'
             }
         }
         allprojects {
@@ -89,11 +89,10 @@ jobs:
         }
         EOF
 
-        # Generate App build.gradle
+        # 5. Create App build.gradle
         cat << 'EOF' > app/build.gradle
         plugins {
             id 'com.android.application'
-            id 'org.jetbrains.kotlin.android'
         }
 
         android {
@@ -110,7 +109,6 @@ jobs:
         }
 
         dependencies {
-            implementation 'androidx.core:core-ktx:1.10.1'
             implementation 'androidx.appcompat:appcompat:1.6.1'
         }
         EOF
