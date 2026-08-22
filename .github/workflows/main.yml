@@ -1,4 +1,4 @@
-name: Build RealWear Barcode Scanner APK
+name: Build RealWear Voice Barcode Scanner APK
 
 on:
   push:
@@ -25,7 +25,7 @@ jobs:
         mkdir -p app/src/main/java/com/realwear/barcodescanner
         mkdir -p app/src/main/res/layout
 
-        # 1. Java Source Code (CameraX + ML Kit Logic)
+        # 1. Java Source Code with Voice Command Buttons & Dynamic Zoom Control
         cat << 'EOF' > app/src/main/java/com/realwear/barcodescanner/MainActivity.java
         package com.realwear.barcodescanner;
 
@@ -33,6 +33,8 @@ jobs:
         import android.content.pm.PackageManager;
         import android.os.Bundle;
         import android.util.Size;
+        import android.widget.Button;
+        import android.widget.LinearLayout;
         import android.widget.TextView;
         import android.widget.Toast;
         import androidx.annotation.NonNull;
@@ -60,14 +62,14 @@ jobs:
             private TextView txtResult;
             private ExecutorService cameraExecutor;
             private Camera camera;
+            private boolean isFlashOn = false;
+            private float currentZoomLevel = 0.0f; // 0.0f = 1x Normal
 
             @Override
             protected void onCreate(Bundle savedInstanceState) {
                 super.onCreate(savedInstanceState);
                 
-                // UI Setup
                 setContentView(createLayout());
-
                 cameraExecutor = Executors.newSingleThreadExecutor();
 
                 if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
@@ -78,30 +80,78 @@ jobs:
             }
 
             private android.view.View createLayout() {
-                android.widget.LinearLayout layout = new android.widget.LinearLayout(this);
-                layout.setOrientation(android.widget.LinearLayout.VERTICAL);
-                layout.setLayoutParams(new android.widget.LinearLayout.LayoutParams(
-                        android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
-                        android.widget.LinearLayout.LayoutParams.MATCH_PARENT));
+                LinearLayout mainLayout = new LinearLayout(this);
+                mainLayout.setOrientation(LinearLayout.VERTICAL);
+                mainLayout.setLayoutParams(new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.MATCH_PARENT));
 
+                // Control Bar with RealWear Voice Speech Commands
+                LinearLayout controlBar = new LinearLayout(this);
+                controlBar.setOrientation(LinearLayout.HORIZONTAL);
+                controlBar.setBackgroundColor(0xFF111111);
+                controlBar.setPadding(10, 10, 10, 10);
+                LinearLayout.LayoutParams controlParams = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, 0, 0.12f);
+                controlBar.setLayoutParams(controlParams);
+
+                Button btnZoomIn = new Button(this);
+                btnZoomIn.setText("ZOOM 10M"); // RealWear voice command trigger: "ZOOM 10M"
+                btnZoomIn.setOnClickListener(v -> setCameraZoom(0.60f)); // HD Max Optical Zoom for 10 meters
+                LinearLayout.LayoutParams btnParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f);
+                btnParams.setMargins(5, 5, 5, 5);
+                btnZoomIn.setLayoutParams(btnParams);
+                controlBar.addView(btnZoomIn);
+
+                Button btnZoomOut = new Button(this);
+                btnZoomOut.setText("RESET ZOOM"); // RealWear voice command trigger: "RESET ZOOM"
+                btnZoomOut.setOnClickListener(v -> setCameraZoom(0.0f)); // Normal 1x view
+                btnZoomOut.setLayoutParams(btnParams);
+                controlBar.addView(btnZoomOut);
+
+                Button btnFlash = new Button(this);
+                btnFlash.setText("TOGGLE FLASH"); // RealWear voice command trigger: "TOGGLE FLASH"
+                btnFlash.setOnClickListener(v -> toggleFlash());
+                btnFlash.setLayoutParams(btnParams);
+                controlBar.addView(btnFlash);
+
+                mainLayout.addView(controlBar);
+
+                // Camera Preview Feed
                 previewView = new PreviewView(this);
-                android.widget.LinearLayout.LayoutParams previewParams = new android.widget.LinearLayout.LayoutParams(
-                        android.widget.LinearLayout.LayoutParams.MATCH_PARENT, 0, 0.75f);
+                LinearLayout.LayoutParams previewParams = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, 0, 0.68f);
                 previewView.setLayoutParams(previewParams);
-                layout.addView(previewView);
+                mainLayout.addView(previewView);
 
+                // Scanned Data Result Panel
                 txtResult = new TextView(this);
-                txtResult.setText("Point camera at barcode (Up to 10m range)...");
+                txtResult.setText("Say 'ZOOM 10M' for 10-meter range scanning...");
                 txtResult.setTextSize(18);
                 txtResult.setPadding(20, 20, 20, 20);
                 txtResult.setBackgroundColor(0xFF222222);
                 txtResult.setTextColor(0xFFFFFFFF);
-                android.widget.LinearLayout.LayoutParams textParams = new android.widget.LinearLayout.LayoutParams(
-                        android.widget.LinearLayout.LayoutParams.MATCH_PARENT, 0, 0.25f);
+                LinearLayout.LayoutParams textParams = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, 0, 0.20f);
                 txtResult.setLayoutParams(textParams);
-                layout.addView(txtResult);
+                mainLayout.addView(txtResult);
 
-                return layout;
+                return mainLayout;
+            }
+
+            private void setCameraZoom(float zoomRatio) {
+                if (camera != null) {
+                    currentZoomLevel = zoomRatio;
+                    camera.getCameraControl().setLinearZoom(zoomRatio);
+                    Toast.makeText(this, zoomRatio > 0 ? "Zooming in (10m Mode)" : "Normal View (1x)", Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            private void toggleFlash() {
+                if (camera != null && camera.getCameraInfo().hasFlashUnit()) {
+                    isFlashOn = !isFlashOn;
+                    camera.getCameraControl().enableTorch(isFlashOn);
+                }
             }
 
             private void startCamera() {
@@ -130,7 +180,7 @@ jobs:
                                             for (Barcode barcode : barcodes) {
                                                 String rawValue = barcode.getRawValue();
                                                 int valueType = barcode.getValueType();
-                                                runOnUiThread(() -> txtResult.setText("Scanned Data:\n" + rawValue + "\nType: " + valueType));
+                                                runOnUiThread(() -> txtResult.setText("Scanned Details:\n" + rawValue + "\nBarcode Type: " + valueType));
                                             }
                                         })
                                         .addOnCompleteListener(task -> imageProxy.close());
@@ -143,10 +193,8 @@ jobs:
                         cameraProvider.unbindAll();
                         camera = cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageAnalysis);
 
-                        // Set 2.5x - 3x zoom for 10-meter long range scanning
-                        if (camera != null) {
-                            camera.getCameraControl().setLinearZoom(0.35f);
-                        }
+                        // Start with 1x normal view
+                        setCameraZoom(0.0f);
 
                     } catch (ExecutionException | InterruptedException e) {
                         e.printStackTrace();
@@ -172,7 +220,7 @@ jobs:
         }
         EOF
 
-        # 2. Android Manifest with Permissions
+        # 2. Android Manifest
         cat << 'EOF' > app/src/main/AndroidManifest.xml
         <?xml version="1.0" encoding="utf-8"?>
         <manifest xmlns:android="http://schemas.android.com/apk/res/android"
@@ -264,8 +312,8 @@ jobs:
     - name: Build with Gradle
       run: gradle assembleDebug
 
-    - name: Upload RealWear Scanner APK
+    - name: Upload RealWear Voice Scanner APK
       uses: actions/upload-artifact@v4
       with:
-        name: realwear-scanner-10m
+        name: realwear-voice-scanner
         path: app/build/outputs/apk/debug/app-debug.apk
