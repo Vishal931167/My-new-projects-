@@ -19,20 +19,20 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Generate Complete Working Android Project
+    - name: Generate Clean Pure Android Project
       run: |
         rm -rf app settings.gradle build.gradle
         mkdir -p app/src/main/java/com/example/myapp
 
-        # 1. Java Source Code
+        # 1. Standard Native Java Activity (No AndroidX dependency issues)
         cat << 'EOF' > app/src/main/java/com/example/myapp/MainActivity.java
         package com.example.myapp;
 
+        import android.app.Activity;
         import android.os.Bundle;
-        import androidx.appcompat.app.AppCompatActivity;
         import android.widget.TextView;
 
-        public class MainActivity extends AppCompatActivity {
+        public class MainActivity extends Activity {
             @Override
             protected void onCreate(Bundle savedInstanceState) {
                 super.onCreate(savedInstanceState);
@@ -44,7 +44,7 @@ jobs:
         }
         EOF
 
-        # 2. Android Manifest
+        # 2. Native Manifest
         cat << 'EOF' > app/src/main/AndroidManifest.xml
         <?xml version="1.0" encoding="utf-8"?>
         <manifest xmlns:android="http://schemas.android.com/apk/res/android"
@@ -53,7 +53,7 @@ jobs:
                 android:allowBackup="true"
                 android:label="My App"
                 android:supportsRtl="true"
-                android:theme="@style/Theme.AppCompat.Light">
+                android:theme="@android:style/Theme.Material.Light">
                 <activity
                     android:name=".MainActivity"
                     android:exported="true">
@@ -66,7 +66,7 @@ jobs:
         </manifest>
         EOF
 
-        # 3. Settings Gradle (Fixes Plugin Repository issue)
+        # 3. Settings Gradle
         cat << 'EOF' > settings.gradle
         pluginManagement {
             repositories {
@@ -93,7 +93,7 @@ jobs:
         }
         EOF
 
-        # 5. App build.gradle
+        # 5. App build.gradle (Pure Android - Zero External Dependencies)
         cat << 'EOF' > app/build.gradle
         plugins {
             id 'com.android.application'
@@ -113,7 +113,7 @@ jobs:
         }
 
         dependencies {
-            implementation 'androidx.appcompat:appcompat:1.6.1'
+            // No external libraries to prevent version conflicts
         }
         EOF
 
