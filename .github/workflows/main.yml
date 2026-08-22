@@ -19,14 +19,15 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Generate Compatible Project Structure
+    - name: Generate Complete Working Android Project
       run: |
         rm -rf app settings.gradle build.gradle
         mkdir -p app/src/main/java/com/example/myapp
 
-        # 1. Java File
+        # 1. Java Source Code
         cat << 'EOF' > app/src/main/java/com/example/myapp/MainActivity.java
         package com.example.myapp;
+
         import android.os.Bundle;
         import androidx.appcompat.app.AppCompatActivity;
         import android.widget.TextView;
@@ -43,7 +44,7 @@ jobs:
         }
         EOF
 
-        # 2. Manifest
+        # 2. Android Manifest
         cat << 'EOF' > app/src/main/AndroidManifest.xml
         <?xml version="1.0" encoding="utf-8"?>
         <manifest xmlns:android="http://schemas.android.com/apk/res/android"
@@ -65,8 +66,25 @@ jobs:
         </manifest>
         EOF
 
-        # 3. settings.gradle
-        echo "include ':app'" > settings.gradle
+        # 3. Settings Gradle (Fixes Plugin Repository issue)
+        cat << 'EOF' > settings.gradle
+        pluginManagement {
+            repositories {
+                google()
+                mavenCentral()
+                gradlePluginPortal()
+            }
+        }
+        dependencyResolutionManagement {
+            repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+            repositories {
+                google()
+                mavenCentral()
+            }
+        }
+        rootProject.name = "My Application"
+        include ':app'
+        EOF
 
         # 4. Root build.gradle
         cat << 'EOF' > build.gradle
