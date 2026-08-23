@@ -62,8 +62,6 @@ jobs:
             private ExecutorService cameraExecutor;
             private Camera camera;
             private boolean isFlashOn = false;
-            
-            // Continuous zoom tracking (Ratio from 0.0 to 1.0)
             private float currentZoomRatio = 0.0f;
 
             @Override
@@ -91,7 +89,6 @@ jobs:
                 LinearLayout.LayoutParams btnParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f);
                 btnParams.setMargins(3, 3, 3, 3);
 
-                // --- Control Row: Zoom In, Zoom Out, Reset, Flash ---
                 LinearLayout controlBar = new LinearLayout(this);
                 controlBar.setOrientation(LinearLayout.HORIZONTAL);
                 controlBar.setBackgroundColor(0xFF111111);
@@ -123,14 +120,12 @@ jobs:
 
                 mainLayout.addView(controlBar);
 
-                // --- Camera Preview Feed ---
                 previewView = new PreviewView(this);
                 LinearLayout.LayoutParams previewParams = new LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT, 0, 0.65f);
                 previewView.setLayoutParams(previewParams);
                 mainLayout.addView(previewView);
 
-                // --- Scanned Data Result Display Panel ---
                 txtResult = new TextView(this);
                 txtResult.setText("10m Scanner Ready. Say 'ZOOM IN' until barcode is clear...");
                 txtResult.setTextSize(16);
@@ -148,11 +143,11 @@ jobs:
             private void adjustZoom(boolean zoomIn) {
                 if (camera != null) {
                     if (zoomIn) {
-                        currentZoomRatio += 0.15f; // हर बार बोलने पर थोड़ा और ज़ूम बढ़ेगा
-                        if (currentZoomRatio > 1.0f) currentZoomRatio = 1.0f; // मैक्सिमम लिमिट
+                        currentZoomRatio += 0.15f;
+                        if (currentZoomRatio > 1.0f) currentZoomRatio = 1.0f;
                     } else {
-                        currentZoomRatio -= 0.15f; // ज़ूम घटेगा
-                        if (currentZoomRatio < 0.0f) currentZoomRatio = 0.0f; // मिनिमम लिमिट
+                        currentZoomRatio -= 0.15f;
+                        if (currentZoomRatio < 0.0f) currentZoomRatio = 0.0f;
                     }
                     camera.getCameraControl().setLinearZoom(currentZoomRatio);
                     Toast.makeText(this, "Zoom Level: " + Math.round(currentZoomRatio * 100) + "%", Toast.LENGTH_SHORT).show();
@@ -326,13 +321,12 @@ jobs:
         }
         EOF
 
-    - name: Setup Gradle
-      uses: actions/setup-gradle@v4
-      with:
-        gradle-version: '8.11.1'
+    - name: Download and Setup Gradle Wrapper
+      run: |
+        gradle wrapper --gradle-version 8.11.1
 
     - name: Build with Gradle
-      run: gradle assembleDebug
+      run: ./gradlew assembleDebug
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
