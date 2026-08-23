@@ -22,16 +22,15 @@ jobs:
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
 
-    - name: Install Android SDK Components
-      run: |
-        sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v3
 
-    - name: Create Complete Android Project Structure
+    - name: Generate Project Files
       run: |
         rm -rf app settings.gradle build.gradle gradlew gradlew.bat gradle
         mkdir -p app/src/main/java/com/realwear/barcodescanner
 
-        # 1. Java Source Code with Continuous Zoom & Flash for RealWear
+        # 1. MainActivity.java
         cat << 'EOF' > app/src/main/java/com/realwear/barcodescanner/MainActivity.java
         package com.realwear.barcodescanner;
 
@@ -322,9 +321,9 @@ jobs:
         }
         EOF
 
-    - name: Build APK Directly using Gradle
+    - name: Build APK with Gradle
       run: |
-        gradle assembleDebug
+        gradle build
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
