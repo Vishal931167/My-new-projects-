@@ -321,12 +321,13 @@ jobs:
         }
         EOF
 
-    - name: Download and Setup Gradle Wrapper
-      run: |
-        gradle wrapper --gradle-version 8.11.1
+    - name: Install Android SDK Build-Tools and Compile
+      uses: android-actions/setup-android@v3
 
-    - name: Build with Gradle
-      run: ./gradlew assembleDebug
+    - name: Build APK using Gradle Direct Execution
+      run: |
+        export ANDROID_HOME=$ANDROID_SDK_ROOT
+        gradle build --stacktrace
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
