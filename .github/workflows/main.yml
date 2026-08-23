@@ -19,12 +19,19 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Generate Continuous Zoom Scanner Project
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+
+    - name: Install Android SDK Components
       run: |
-        rm -rf app settings.gradle build.gradle
+        sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+
+    - name: Generate Project and Gradle Wrapper
+      run: |
+        rm -rf app settings.gradle build.gradle gradlew gradlew.bat gradle
         mkdir -p app/src/main/java/com/realwear/barcodescanner
 
-        # 1. Java Source Code with Continuous Zoom In/Out & Flash
+        # 1. Java Source Code with Continuous Zoom & Flash for RealWear
         cat << 'EOF' > app/src/main/java/com/realwear/barcodescanner/MainActivity.java
         package com.realwear.barcodescanner;
 
@@ -127,7 +134,7 @@ jobs:
                 mainLayout.addView(previewView);
 
                 txtResult = new TextView(this);
-                txtResult.setText("10m Scanner Ready. Say 'ZOOM IN' until barcode is clear...");
+                txtResult.setText("RealWear 10m Scanner Ready...");
                 txtResult.setTextSize(16);
                 txtResult.setPadding(20, 20, 20, 20);
                 txtResult.setBackgroundColor(0xFF222222);
@@ -150,7 +157,7 @@ jobs:
                         if (currentZoomRatio < 0.0f) currentZoomRatio = 0.0f;
                     }
                     camera.getCameraControl().setLinearZoom(currentZoomRatio);
-                    Toast.makeText(this, "Zoom Level: " + Math.round(currentZoomRatio * 100) + "%", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, "Zoom: " + Math.round(currentZoomRatio * 100) + "%", Toast.LENGTH_SHORT).show();
                 }
             }
 
@@ -158,7 +165,6 @@ jobs:
                 if (camera != null) {
                     currentZoomRatio = 0.0f;
                     camera.getCameraControl().setLinearZoom(currentZoomRatio);
-                    Toast.makeText(this, "Zoom Reset (1x)", Toast.LENGTH_SHORT).show();
                 }
             }
 
@@ -194,8 +200,7 @@ jobs:
                                         .addOnSuccessListener(barcodes -> {
                                             for (Barcode barcode : barcodes) {
                                                 String rawValue = barcode.getRawValue();
-                                                int valueType = barcode.getValueType();
-                                                runOnUiThread(() -> txtResult.setText("Scanned Successfully:\n" + rawValue + "\nType: " + valueType));
+                                                runOnUiThread(() -> txtResult.setText("Scanned:\n" + rawValue));
                                             }
                                         })
                                         .addOnCompleteListener(task -> imageProxy.close());
@@ -208,8 +213,6 @@ jobs:
                         cameraProvider.unbindAll();
                         camera = cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageAnalysis);
 
-                        resetZoom();
-
                     } catch (ExecutionException | InterruptedException e) {
                         e.printStackTrace();
                     }
@@ -221,8 +224,6 @@ jobs:
                 super.onRequestPermissionsResult(requestCode, permissions, grantResults);
                 if (requestCode == CAMERA_PERMISSION_CODE && grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                     startCamera();
-                } else {
-                    Toast.makeText(this, "Camera Permission Required", Toast.LENGTH_SHORT).show();
                 }
             }
 
@@ -321,13 +322,13 @@ jobs:
         }
         EOF
 
-    - name: Install Android SDK Build-Tools and Compile
-      uses: android-actions/setup-android@v3
+        # 6. Generate Gradle Wrapper
+        gradle wrapper --gradle-version 8.5
 
-    - name: Build APK using Gradle Direct Execution
+    - name: Build APK using Gradle Wrapper
       run: |
-        export ANDROID_HOME=$ANDROID_SDK_ROOT
-        gradle build --stacktrace
+        chmod +x gradlew
+        ./gradlew assembleDebug
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
