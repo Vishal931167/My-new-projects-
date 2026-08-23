@@ -289,7 +289,7 @@ jobs:
         }
         EOF
 
-        # 5. App build.gradle
+        # 5. App build.gradle (Updated with explicit camera-video dependency to resolve conflict)
         cat << 'EOF' > app/build.gradle
         plugins {
             id 'com.android.application'
@@ -316,13 +316,14 @@ jobs:
             implementation "androidx.camera:camera-camera2:${camerax_version}"
             implementation "androidx.camera:camera-lifecycle:${camerax_version}"
             implementation "androidx.camera:camera-view:${camerax_version}"
+            implementation "androidx.camera:camera-video:${camerax_version}"
             
             implementation 'com.google.mlkit:barcode-scanning:17.2.0'
             implementation 'com.google.guava:guava:31.1-android'
         }
         EOF
 
-        # 6. Generate Gradle Wrapper automatically
+        # 6. Generate Gradle Wrapper
         gradle wrapper --gradle-version 8.4
 
     - name: Build APK using Gradle Wrapper
