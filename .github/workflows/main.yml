@@ -1,4 +1,4 @@
-name: Build RealWear Voice Barcode Scanner APK
+name: Build Continuous Zoom RealWear Scanner APK
 
 on:
   push:
@@ -19,12 +19,12 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Generate RealWear Scanner Project
+    - name: Generate Continuous Zoom Scanner Project
       run: |
         rm -rf app settings.gradle build.gradle
         mkdir -p app/src/main/java/com/realwear/barcodescanner
 
-        # 1. Java Source Code with Voice Commands & Zoom Logic
+        # 1. Java Source Code with Continuous Zoom In/Out & Flash
         cat << 'EOF' > app/src/main/java/com/realwear/barcodescanner/MainActivity.java
         package com.realwear.barcodescanner;
 
@@ -62,11 +62,13 @@ jobs:
             private ExecutorService cameraExecutor;
             private Camera camera;
             private boolean isFlashOn = false;
+            
+            // Continuous zoom tracking (Ratio from 0.0 to 1.0)
+            private float currentZoomRatio = 0.0f;
 
             @Override
             protected void onCreate(Bundle savedInstanceState) {
                 super.onCreate(savedInstanceState);
-                
                 setContentView(createLayout());
                 cameraExecutor = Executors.newSingleThreadExecutor();
 
@@ -84,27 +86,34 @@ jobs:
                         LinearLayout.LayoutParams.MATCH_PARENT,
                         LinearLayout.LayoutParams.MATCH_PARENT));
 
+                LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, 0, 0.10f);
+                LinearLayout.LayoutParams btnParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f);
+                btnParams.setMargins(3, 3, 3, 3);
+
+                // --- Control Row: Zoom In, Zoom Out, Reset, Flash ---
                 LinearLayout controlBar = new LinearLayout(this);
                 controlBar.setOrientation(LinearLayout.HORIZONTAL);
                 controlBar.setBackgroundColor(0xFF111111);
-                controlBar.setPadding(10, 10, 10, 10);
-                LinearLayout.LayoutParams controlParams = new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT, 0, 0.12f);
-                controlBar.setLayoutParams(controlParams);
+                controlBar.setLayoutParams(rowParams);
 
                 Button btnZoomIn = new Button(this);
-                btnZoomIn.setText("ZOOM 10M");
-                btnZoomIn.setOnClickListener(v -> setCameraZoom(0.60f));
-                LinearLayout.LayoutParams btnParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f);
-                btnParams.setMargins(5, 5, 5, 5);
+                btnZoomIn.setText("ZOOM IN");
+                btnZoomIn.setOnClickListener(v -> adjustZoom(true));
                 btnZoomIn.setLayoutParams(btnParams);
                 controlBar.addView(btnZoomIn);
 
                 Button btnZoomOut = new Button(this);
-                btnZoomOut.setText("RESET ZOOM");
-                btnZoomOut.setOnClickListener(v -> setCameraZoom(0.0f));
+                btnZoomOut.setText("ZOOM OUT");
+                btnZoomOut.setOnClickListener(v -> adjustZoom(false));
                 btnZoomOut.setLayoutParams(btnParams);
                 controlBar.addView(btnZoomOut);
+
+                Button btnReset = new Button(this);
+                btnReset.setText("RESET ZOOM");
+                btnReset.setOnClickListener(v -> resetZoom());
+                btnReset.setLayoutParams(btnParams);
+                controlBar.addView(btnReset);
 
                 Button btnFlash = new Button(this);
                 btnFlash.setText("TOGGLE FLASH");
@@ -114,30 +123,47 @@ jobs:
 
                 mainLayout.addView(controlBar);
 
+                // --- Camera Preview Feed ---
                 previewView = new PreviewView(this);
                 LinearLayout.LayoutParams previewParams = new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT, 0, 0.68f);
+                        LinearLayout.LayoutParams.MATCH_PARENT, 0, 0.65f);
                 previewView.setLayoutParams(previewParams);
                 mainLayout.addView(previewView);
 
+                // --- Scanned Data Result Display Panel ---
                 txtResult = new TextView(this);
-                txtResult.setText("Say 'ZOOM 10M' for 10-meter range scanning...");
-                txtResult.setTextSize(18);
+                txtResult.setText("10m Scanner Ready. Say 'ZOOM IN' until barcode is clear...");
+                txtResult.setTextSize(16);
                 txtResult.setPadding(20, 20, 20, 20);
                 txtResult.setBackgroundColor(0xFF222222);
                 txtResult.setTextColor(0xFFFFFFFF);
                 LinearLayout.LayoutParams textParams = new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT, 0, 0.20f);
+                        LinearLayout.LayoutParams.MATCH_PARENT, 0, 0.25f);
                 txtResult.setLayoutParams(textParams);
                 mainLayout.addView(txtResult);
 
                 return mainLayout;
             }
 
-            private void setCameraZoom(float zoomRatio) {
+            private void adjustZoom(boolean zoomIn) {
                 if (camera != null) {
-                    camera.getCameraControl().setLinearZoom(zoomRatio);
-                    Toast.makeText(this, zoomRatio > 0 ? "Zooming in (10m Mode)" : "Normal View (1x)", Toast.LENGTH_SHORT).show();
+                    if (zoomIn) {
+                        currentZoomRatio += 0.15f; // हर बार बोलने पर थोड़ा और ज़ूम बढ़ेगा
+                        if (currentZoomRatio > 1.0f) currentZoomRatio = 1.0f; // मैक्सिमम लिमिट
+                    } else {
+                        currentZoomRatio -= 0.15f; // ज़ूम घटेगा
+                        if (currentZoomRatio < 0.0f) currentZoomRatio = 0.0f; // मिनिमम लिमिट
+                    }
+                    camera.getCameraControl().setLinearZoom(currentZoomRatio);
+                    Toast.makeText(this, "Zoom Level: " + Math.round(currentZoomRatio * 100) + "%", Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            private void resetZoom() {
+                if (camera != null) {
+                    currentZoomRatio = 0.0f;
+                    camera.getCameraControl().setLinearZoom(currentZoomRatio);
+                    Toast.makeText(this, "Zoom Reset (1x)", Toast.LENGTH_SHORT).show();
                 }
             }
 
@@ -174,7 +200,7 @@ jobs:
                                             for (Barcode barcode : barcodes) {
                                                 String rawValue = barcode.getRawValue();
                                                 int valueType = barcode.getValueType();
-                                                runOnUiThread(() -> txtResult.setText("Scanned Details:\n" + rawValue + "\nBarcode Type: " + valueType));
+                                                runOnUiThread(() -> txtResult.setText("Scanned Successfully:\n" + rawValue + "\nType: " + valueType));
                                             }
                                         })
                                         .addOnCompleteListener(task -> imageProxy.close());
@@ -187,7 +213,7 @@ jobs:
                         cameraProvider.unbindAll();
                         camera = cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageAnalysis);
 
-                        setCameraZoom(0.0f);
+                        resetZoom();
 
                     } catch (ExecutionException | InterruptedException e) {
                         e.printStackTrace();
@@ -267,7 +293,7 @@ jobs:
         }
         EOF
 
-        # 5. App build.gradle (Strict CameraX dependencies alignment)
+        # 5. App build.gradle
         cat << 'EOF' > app/build.gradle
         plugins {
             id 'com.android.application'
@@ -289,29 +315,27 @@ jobs:
         dependencies {
             implementation 'androidx.appcompat:appcompat:1.6.1'
             
-            // CameraX Aligned Dependencies
             def camerax_version = "1.3.1"
             implementation "androidx.camera:camera-core:${camerax_version}"
             implementation "androidx.camera:camera-camera2:${camerax_version}"
             implementation "androidx.camera:camera-lifecycle:${camerax_version}"
             implementation "androidx.camera:camera-view:${camerax_version}"
             
-            // Google ML Kit Barcode Scanning
             implementation 'com.google.mlkit:barcode-scanning:17.2.0'
             implementation 'com.google.guava:guava:31.1-android'
         }
         EOF
 
     - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@v4
+      uses: actions/setup-gradle@v4
       with:
         gradle-version: '8.11.1'
 
     - name: Build with Gradle
       run: gradle assembleDebug
 
-    - name: Upload RealWear Voice Scanner APK
+    - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: realwear-voice-scanner
+        name: realwear-continuous-zoom-scanner
         path: app/build/outputs/apk/debug/app-debug.apk
