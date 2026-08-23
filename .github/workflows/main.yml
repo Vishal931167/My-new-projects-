@@ -26,7 +26,7 @@ jobs:
       run: |
         sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
-    - name: Generate Project and Gradle Wrapper
+    - name: Create Complete Android Project Structure
       run: |
         rm -rf app settings.gradle build.gradle gradlew gradlew.bat gradle
         mkdir -p app/src/main/java/com/realwear/barcodescanner
@@ -322,13 +322,9 @@ jobs:
         }
         EOF
 
-        # 6. Generate Gradle Wrapper
-        gradle wrapper --gradle-version 8.5
-
-    - name: Build APK using Gradle Wrapper
+    - name: Build APK Directly using Gradle
       run: |
-        chmod +x gradlew
-        ./gradlew assembleDebug
+        gradle assembleDebug
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
