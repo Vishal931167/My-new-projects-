@@ -1,15 +1,24 @@
-package com.example.myapp
+package com.example.mynewproject
 
 import android.os.Bundle
-import androidx.appcompat.app.AppCompatActivity
+import android.widget.Button
 import android.widget.TextView
+import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
 
 class MainActivity : AppCompatActivity() {
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val textView = TextView(this)
-        textView.text = "Hello World! App Built Successfully"
-        textView.textSize = 24f
-        setContentView(textView)
+        setContentView(R.layout.activity_main)
+
+        // RealWear पर जब यूज़र बोलता है "CLICK ME", तो यह बटन ट्रिगर होगा
+        val myButton = findViewById<Button>(R.id.btn_action)
+        val myTextView = findViewById<TextView>(R.id.tv_status)
+
+        myButton.setOnClickListener {
+            myTextView.text = "Voice Command Received!"
+            Toast.makeText(this, "RealWear Action Triggered!", Toast.LENGTH_SHORT).show()
+        }
     }
 }
