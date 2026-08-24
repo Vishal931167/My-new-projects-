@@ -1,55 +1,28 @@
-<?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent">
+name: Android CI Build
 
-    <androidx.camera.view.PreviewView
-        android:id="@+id/previewView"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:layout_alignParentBottom="true"
-        android:background="#80000000"
-        android:padding="16dp">
+jobs:
+  build:
+    runs-on: ubuntu-latest
 
-        <TextView
-            android:id="@+id/txtResult"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="स्कैन करने के लिए बारकोड सामने लाएं..."
-            android:textColor="#FFFFFF"
-            android:textSize="16sp"
-            android:layout_marginBottom="12dp" />
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
 
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center">
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: gradle
 
-            <Button
-                android:id="@+id/btnFlash"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Flash Light"
-                android:layout_marginEnd="8dp"/>
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew || true
 
-            <Button
-                android:id="@+id/btnVoice"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Voice Command"
-                android:layout_marginEnd="8dp"/>
-
-            <Button
-                android:id="@+id/btnRead"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Read (बोलकर बताओ)"/>
-        </LinearLayout>
-    </LinearLayout>
-</RelativeLayout>
+    - name: Build APK with Gradle
+      run: ./gradlew assembleDebug --stacktrace
