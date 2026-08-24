@@ -1,24 +1,203 @@
-package com.example.mynewproject
+package com.example.mynewprojects
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
+import android.speech.tts.TextToSpeech
 import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.camera.core.*
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.view.PreviewView
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import com.google.mlkit.vision.barcode.BarcodeScanning
+import com.google.mlkit.vision.common.InputImage
+import java.util.Locale
+import java.util.concurrent.Executors
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
+
+    private lateinit var previewView: PreviewView
+    private lateinit var txtResult: TextView
+    private lateinit var btnFlash: Button
+    private lateinit var btnVoice: Button
+    private lateinit var btnRead: Button
+
+    private var camera: Camera? = null
+    private var isTorchOn = false
+    private var currentZoomRatio = 1.0f
+
+    private lateinit var tts: TextToSpeech
+    private lateinit var speechRecognizer: SpeechRecognizer
+    private var scannedResultText = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // RealWear पर जब यूज़र बोलता है "CLICK ME", तो यह बटन ट्रिगर होगा
-        val myButton = findViewById<Button>(R.id.btn_action)
-        val myTextView = findViewById<TextView>(R.id.tv_status)
+        previewView = findViewById(R.id.previewView)
+        txtResult = findViewById(R.id.txtResult)
+        btnFlash = findViewById(R.id.btnFlash)
+        btnVoice = findViewById(R.id.btnVoice)
+        btnRead = findViewById(R.id.btnRead)
 
-        myButton.setOnClickListener {
-            myTextView.text = "Voice Command Received!"
-            Toast.makeText(this, "RealWear Action Triggered!", Toast.LENGTH_SHORT).show()
+        tts = TextToSpeech(this, this)
+        setupSpeechRecognizer()
+
+        checkPermissions()
+
+        btnFlash.setOnClickListener { toggleFlash() }
+        btnRead.setOnClickListener { speakBarcodeData() }
+        btnVoice.setOnClickListener { startVoiceCommand() }
+    }
+
+    private fun checkPermissions() {
+        val permissions = arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
+        if (permissions.all { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }) {
+            startCamera()
+        } else {
+            ActivityCompat.requestPermissions(this, permissions, 101)
         }
+    }
+
+    private fun startCamera() {
+        val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
+
+        cameraProviderFuture.addListener({
+            val cameraProvider = cameraProviderFuture.get()
+
+            val preview = Preview.Builder().build().also {
+                it.setSurfaceProvider(previewView.surfaceProvider)
+            }
+
+            // लंबी दूरी के बारकोड के लिए उच्च रिज़ॉल्यूशन (High-Resolution)
+            val imageAnalyzer = ImageAnalysis.Builder()
+                .setTargetResolution(android.util.Size(1920, 1080))
+                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .build()
+                .also {
+                    it.setAnalyzer(Executors.newSingleThreadExecutor(), BarcodeAnalyzer { barcodeValue ->
+                        runOnUiThread {
+                            scannedResultText = barcodeValue
+                            txtResult.text = "स्कैन डेटा: $barcodeValue"
+                        }
+                    })
+                }
+
+            val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+
+            try {
+                cameraProvider.unbindAll()
+                camera = cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageAnalyzer)
+            } catch (e: Exception) {
+                Toast.makeText(this, "कैमरा एरर: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }, ContextCompat.getMainExecutor(this))
+    }
+
+    // टॉर्च लाइट ऑन/ऑफ
+    private fun toggleFlash() {
+        camera?.cameraControl?.enableTorch(!isTorchOn)
+        isTorchOn = !isTorchOn
+        btnFlash.text = if (isTorchOn) "Flash OFF" else "Flash ON"
+    }
+
+    // वॉइस कमांड सेटिंग्स (Zoom In, Zoom Out, Flash On/Off)
+    private fun setupSpeechRecognizer() {
+        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
+        speechRecognizer.setRecognitionListener(object : RecognitionListener {
+            override fun onResults(results: Bundle?) {
+                val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                if (!matches.isNullOrEmpty()) {
+                    val command = matches[0].lowercase(Locale.ROOT)
+                    handleVoiceCommand(command)
+                }
+            }
+            override fun onReadyForSpeech(params: Bundle?) {}
+            override fun onBeginningOfSpeech() {}
+            override fun onRmsChanged(rmsdB: Float) {}
+            override fun onBufferReceived(buffer: ByteArray?) {}
+            override fun onEndOfSpeech() {}
+            override fun onError(error: Int) {}
+            override fun onPartialResults(partialResults: Bundle?) {}
+            override fun onEvent(eventType: Int, params: Bundle?) {}
+        })
+    }
+
+    private fun startVoiceCommand() {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+        }
+        speechRecognizer.startListening(intent)
+        Toast.makeText(this, "बोलिए: 'Zoom In', 'Zoom Out', 'Flash On'", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun handleVoiceCommand(command: String) {
+        when {
+            command.contains("zoom in") || command.contains("ज़ूम इन") -> {
+                currentZoomRatio = (currentZoomRatio + 1.5f).coerceAtMost(5.0f)
+                camera?.cameraControl?.setZoomRatio(currentZoomRatio)
+                Toast.makeText(this, "Zoom Level: $currentZoomRatio", Toast.LENGTH_SHORT).show()
+            }
+            command.contains("zoom out") || command.contains("ज़ूम आउट") -> {
+                currentZoomRatio = (currentZoomRatio - 1.5f).coerceAtLeast(1.0f)
+                camera?.cameraControl?.setZoomRatio(currentZoomRatio)
+                Toast.makeText(this, "Zoom Level: $currentZoomRatio", Toast.LENGTH_SHORT).show()
+            }
+            command.contains("flash on") || command.contains("लाइट ऑन") -> if (!isTorchOn) toggleFlash()
+            command.contains("flash off") || command.contains("लाइट ऑफ") -> if (isTorchOn) toggleFlash()
+            command.contains("read") || command.contains("पढ़ो") -> speakBarcodeData()
+        }
+    }
+
+    // बारकोड के अंदर का सामान बोलकर सुनाना (Text To Speech)
+    private fun speakBarcodeData() {
+        if (scannedResultText.isNotEmpty()) {
+            tts.speak(scannedResultText, TextToSpeech.QUEUE_FLUSH, null, null)
+        } else {
+            tts.speak("कोई बारकोड स्कैन नहीं हुआ है", TextToSpeech.QUEUE_FLUSH, null, null)
+        }
+    }
+
+    override fun onInit(status: Int) {
+        if (status == TextToSpeech.SUCCESS) {
+            tts.language = Locale.getDefault()
+        }
+    }
+
+    private class BarcodeAnalyzer(private val onBarcodeDetected: (String) -> Unit) : ImageAnalysis.Analyzer {
+        private val scanner = BarcodeScanning.getClient()
+
+        @OptIn(ExperimentalGetImage::class)
+        override fun analyze(imageProxy: ImageProxy) {
+            val mediaImage = imageProxy.image
+            if (mediaImage != null) {
+                val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
+                scanner.process(image)
+                    .addOnSuccessListener { barcodes ->
+                        for (barcode in barcodes) {
+                            barcode.rawValue?.let { value -> onBarcodeDetected(value) }
+                        }
+                    }
+                    .addOnCompleteListener { imageProxy.close() }
+            } else {
+                imageProxy.close()
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        tts.stop()
+        tts.shutdown()
+        speechRecognizer.destroy()
     }
 }
