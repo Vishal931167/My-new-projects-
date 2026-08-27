@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout android:layout_height="match_parent" android:layout_width="match_parent" xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <androidx.camera.view.PreviewView
+        android:id="@+id/previewView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <TextView android:background="#A0000000" android:id="@+id/txtResult" android:layout_alignParentTop="true" android:layout_centerHorizontal="true" android:layout_height="wrap_content" android:layout_marginTop="30dp" android:layout_width="wrap_content" android:padding="16dp" android:text="RealWear Scanner Ready" android:textColor="#FFFFFF" android:textSize="22sp"/>
+
+    <LinearLayout android:layout_alignParentBottom="true" android:layout_height="wrap_content" android:layout_width="match_parent" android:orientation="horizontal" android:padding="20dp">
+
+        <Button android:contentDescription="Zoom In" android:id="@+id/btnZoomIn" android:layout_height="wrap_content" android:layout_weight="1" android:layout_width="0dp" android:text="ZOOM IN"/>
+
+        <Button android:contentDescription="Zoom Out" android:id="@+id/btnZoomOut" android:layout_height="wrap_content" android:layout_weight="1" android:layout_width="0dp" android:text="ZOOM OUT"/>
+    </LinearLayout>
+</RelativeLayout>
